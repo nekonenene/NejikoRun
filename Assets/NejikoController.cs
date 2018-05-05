@@ -7,11 +7,16 @@ public class NejikoController : MonoBehaviour {
 	const int MaxLane = 2;
 	const float LaneWidth = 1.0f;
 
+	const int DefaultLife = 3;
+	const float StunDurationSec = 0.5f; // 気絶時間の秒数
+
 	CharacterController controller;
 	Animator animator;
 
 	Vector3 moveDirection = Vector3.zero;
 	int targetLane;
+	int life = DefaultLife;
+	float remainingStunTime = 0.0f;
 
 	public float gravity;
 	public float speedX; // 横方向の移動スピード
@@ -32,14 +37,21 @@ public class NejikoController : MonoBehaviour {
 		if(Input.GetKeyDown("right")) MoveLane(toRight: true);
 		if(Input.GetKeyDown("space")) Jump();
 
-		// ターゲットレーンに向かってX座標移動
-		float ratioX = (targetLane * LaneWidth - transform.position.x) / LaneWidth; // 現在地とターゲットが離れてるほど値を大きく
-		moveDirection.x = ratioX * speedX;
+		if(IsStun()) {
+			// 動きを止めつつ、気絶状態からの復帰カウントを進める
+			moveDirection.x = 0.0f;
+			moveDirection.z = 0.0f;
+			remainingStunTime -= Time.deltaTime;
+		} else {
+			// ターゲットレーンに向かってX座標移動
+			float ratioX = (targetLane * LaneWidth - transform.position.x) / LaneWidth; // 現在地とターゲットが離れてるほど値を大きく
+			moveDirection.x = ratioX * speedX;
 
-		// 奥向きへ、一定速度になるまで加速させる
-		float ratioZ = moveDirection.z + (accelerationZ * Time.deltaTime);
-		// Mathf.Clamp : 第一引数の値が、第二引数と第三引数の間を出ないように調整してくれる関数
-		moveDirection.z = Mathf.Clamp(ratioZ, 0, speedZ);
+			// 奥向きへ、一定速度になるまで加速させる
+			float ratioZ = moveDirection.z + (accelerationZ * Time.deltaTime);
+			// Mathf.Clamp : 第一引数の値が、第二引数と第三引数の間を出ないように調整してくれる関数
+			moveDirection.z = Mathf.Clamp(ratioZ, 0, speedZ);
+		}
 
 		// 重力を常に与える
 		// Time.deltaTime : 前フレームからの経過時間
@@ -59,8 +71,21 @@ public class NejikoController : MonoBehaviour {
 		animator.SetBool("run", moveDirection.z > 0.0f);
 	}
 
+	public int Life() {
+		return life;
+	}
+
+	// スタン中か、Lifeが0になってるときtrue
+	public bool IsStun() {
+		return remainingStunTime > 0.0f || life <= 0;
+	}
+
 	// レーン移動
 	public void MoveLane(bool toRight = true) {
+		if(IsStun()) {
+			return;
+		}
+
 		// 地上にいる場合のみ操作を受け付ける
 		if(controller.isGrounded) {
 			if(toRight && targetLane < MaxLane) {
@@ -72,10 +97,33 @@ public class NejikoController : MonoBehaviour {
 	}
 
 	public void Jump() {
+		if(IsStun()) {
+			return;
+		}
+
 		// 地上にいる場合のみ操作を受け付ける
 		if(controller.isGrounded) {
 			moveDirection.y = speedJump;
 			animator.SetTrigger("jump"); // アニメーションクリップの切り替え
+		}
+	}
+
+	// CharacterController との衝突が発生した際の処理
+	void OnControllerColliderHit(ControllerColliderHit hit) {
+		if(IsStun()) {
+			return;
+		}
+
+		if(hit.gameObject.tag == "Obstacle") {
+			// ライフを減らして気絶状態に移行
+			--life;
+			remainingStunTime = StunDurationSec;
+
+			// ダメージ時のアニメーションクリップに移行
+			animator.SetTrigger("damage");
+
+			// 衝突した障害物オブジェクトは削除する
+			Destroy(hit.gameObject);
 		}
 	}
 }
