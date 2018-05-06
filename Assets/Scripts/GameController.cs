@@ -26,6 +26,11 @@ public class GameController : MonoBehaviour {
 			// Update処理を止める
 			enabled = false;
 
+			// ハイスコアを PlayerPrefs に保存
+			if(score > PlayerPrefs.GetInt("HighScore")) {
+				PlayerPrefs.SetInt("HighScore", score);
+			}
+
 			// 2秒待ち、タイトルへ戻す。 Invoke関数により遅延実行
 			Invoke("ReturnToTitle", 2.0f);
 		}
